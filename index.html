@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Calendário Dinastia</title>
+  <title>Budget Calendar</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -12,7 +12,7 @@
     <header class="top-bar">
       <div class="logo-container">
         <img src="logo.png" alt="Logo" class="logo" />
-        <span class="app-title">Calendário Dinastia</span>
+        <span class="app-title">Budget Calendar</span>
       </div>
       <div class="right-top">
         <div id="day-summary">
@@ -33,6 +33,7 @@
         <label><span>Password</span><input type="password" id="auth-password" required /></label>
         <div class="auth-actions">
           <button type="submit" id="login-btn" class="btn btn-primary">Login</button>
+          <button type="button" id="signup-btn" class="btn btn-secondary">Sign up</button>
         </div>
         <p id="auth-message" class="auth-message"></p>
       </form>
