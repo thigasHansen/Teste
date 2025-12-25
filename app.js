@@ -269,6 +269,7 @@ function renderCalendar() {
 
     const dayDiv = document.createElement("div");
     dayDiv.classList.add("calendar-day");
+    dayDiv.dataset.date = iso; // <-- store the REAL date
 
     if (dayDate.getMonth() !== currentMonth) {
       dayDiv.classList.add("outside-month");
@@ -365,39 +366,13 @@ function selectDate(dateObj) {
   const iso = toISODate(dateObj);
   selectedDate = dateObj;
 
+  // Clear previous selection
   const dayNodes = Array.from(calendarDays.children);
   dayNodes.forEach((node) => node.classList.remove("selected"));
 
-  dayNodes.forEach((node) => {
-    const numNode = node.querySelector(".day-number");
-    if (!numNode) return;
-    const day = parseInt(numNode.textContent, 10);
-    const isOutsideMonth = node.classList.contains("outside-month");
-
-    let cellMonth = currentMonth;
-    let cellYear = currentYear;
-
-    if (isOutsideMonth) {
-      if (day > 15) {
-        cellMonth = currentMonth - 1;
-        if (cellMonth < 0) {
-          cellMonth = 11;
-          cellYear--;
-        }
-      } else {
-        cellMonth = currentMonth + 1;
-        if (cellMonth > 11) {
-          cellMonth = 0;
-          cellYear++;
-        }
-      }
-    }
-
-    const cellDate = new Date(cellYear, cellMonth, day);
-    if (toISODate(cellDate) === iso) {
-      node.classList.add("selected");
-    }
-  });
+  // Highlight the correct cell using the stored ISO date
+  const match = dayNodes.find((node) => node.dataset.date === iso);
+  if (match) match.classList.add("selected");
 
   updateSummaryForDate(iso);
   updateEventFormDate();
