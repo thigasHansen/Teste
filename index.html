@@ -1,115 +1,1505 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Calendário Dinastia</title>
+  <title>Calendário de Gastos</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="style.css" />
-  <!-- Supabase JS v2 from CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase JS (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.js"></script>
+
+  <style>
+    :root {
+      --bg-color: rgba(13, 23, 30, 1);
+      --accent: #00c2ff;
+      --accent-soft: rgba(0, 194, 255, 0.2);
+      --text-main: #f5f7fa;
+      --text-soft: #b0bac5;
+      --danger: #ff4b6a;
+      --success: #1dd1a1;
+      --card-bg: #18252f;
+      --card-border: #202f3a;
+      --pill-bg: #243340;
+      --done-opacity: 0.5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      background: var(--bg-color);
+      color: var(--text-main);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      background: var(--accent);
+      color: #041017;
+      transition: background 0.2s, transform 0.05s;
+    }
+
+    button:hover {
+      background: #00a3d6;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    input, select {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #334553;
+      background: #0c141b;
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--accent);
+    }
+
+    .app-shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid #1e2b35;
+      background: linear-gradient(
+        90deg,
+        rgba(0, 194, 255, 0.08),
+        rgba(0, 194, 255, 0)
+      );
+    }
+
+    .top-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #273643;
+      background: #0d171f;
+    }
+
+    .logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .app-title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .app-title-main {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .app-title-sub {
+      font-size: 12px;
+      color: var(--text-soft);
+    }
+
+    .top-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .daily-summary-quick {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      font-size: 12px;
+    }
+
+    .daily-summary-quick span {
+      color: var(--text-soft);
+    }
+
+    .daily-summary-quick strong {
+      color: var(--text-main);
+    }
+
+    .auth-status {
+      font-size: 12px;
+      color: var(--text-soft);
+    }
+
+    /* Main layout */
+    .main-content {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 1200px;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .card-sub {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    /* Auth view */
+    #auth-view {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .auth-card {
+      max-width: 360px;
+      width: 100%;
+    }
+
+    .auth-tabs {
+      display: flex;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #243340;
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 6px 0;
+      text-align: center;
+      font-size: 13px;
+      cursor: pointer;
+      background: #111a22;
+      color: var(--text-soft);
+    }
+
+    .auth-tab.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 6px;
+    }
+
+    .auth-error {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--danger);
+    }
+
+    /* Calendar */
+    #app-view {
+      display: none;
+      width: 100%;
+    }
+
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .month-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .month-name {
+      flex: 1;
+      text-align: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .month-button {
+      padding: 4px 8px;
+      font-size: 12px;
+      background: #101821;
+      color: var(--text-main);
+      border-radius: 6px;
+      border: 1px solid #293845;
+      min-width: 32px;
+    }
+
+    .month-button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      font-size: 11px;
+    }
+
+    .weekday {
+      text-align: center;
+      padding: 4px 0;
+      color: var(--text-soft);
+      font-weight: 500;
+      border-bottom: 1px solid #202f3a;
+    }
+
+    .day-cell {
+      min-height: 70px;
+      padding: 4px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      background: #0d171f;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .day-cell.inactive {
+      opacity: 0.25;
+      cursor: default;
+    }
+
+    .day-cell:hover:not(.inactive) {
+      border-color: rgba(0, 194, 255, 0.4);
+    }
+
+    .day-cell.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(0, 194, 255, 0.4);
+    }
+
+    .day-number-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+
+    .day-number {
+      font-weight: 600;
+    }
+
+    .day-total {
+      font-size: 10px;
+      color: var(--text-soft);
+    }
+
+    .event-pill {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      padding: 1px 4px;
+      border-radius: 999px;
+      font-size: 10px;
+      gap: 4px;
+      background: var(--pill-bg);
+      color: #f5f7fa;
+      cursor: pointer;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .event-pill-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+
+    .event-pill.done {
+      opacity: var(--done-opacity);
+      text-decoration: line-through;
+    }
+
+    /* Right-side day summary */
+    .day-summary-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .day-summary-date {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .day-summary-meta {
+      font-size: 11px;
+      color: var(--text-soft);
+      text-align: right;
+    }
+
+    .day-summary-meta strong {
+      color: var(--text-main);
+    }
+
+    .day-events {
+      max-height: 250px;
+      overflow-y: auto;
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .day-event-item {
+      padding: 6px;
+      border-radius: 8px;
+      background: #101821;
+      border: 1px solid #243340;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .day-event-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .day-event-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .day-event-name span {
+      font-weight: 500;
+    }
+
+    .day-event-name .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+    }
+
+    .day-event-name.done span {
+      text-decoration: line-through;
+      opacity: var(--done-opacity);
+    }
+
+    .day-event-value {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .day-event-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+    }
+
+    .day-event-actions button {
+      padding: 3px 6px;
+      font-size: 11px;
+    }
+
+    .btn-ghost {
+      background: #101821;
+      color: var(--text-soft);
+      border: 1px solid #243340;
+    }
+
+    .btn-ghost:hover {
+      background: #15202b;
+    }
+
+    .btn-danger {
+      background: rgba(255, 75, 106, 0.15);
+      color: #ff9eb1;
+      border: 1px solid rgba(255, 75, 106, 0.6);
+    }
+
+    .btn-danger:hover {
+      background: rgba(255, 75, 106, 0.25);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text-main);
+      border: 1px solid #3a4b59;
+    }
+
+    .btn-outline:hover {
+      background: #13202b;
+    }
+
+    /* Add/edit event form */
+    .event-form {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid #243340;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .event-form-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .event-form-row .form-group {
+      flex: 1;
+    }
+
+    .event-form-color-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .event-form-color-row input[type="color"] {
+      width: 40px;
+      padding: 0;
+      border-radius: 6px;
+      border: 1px solid #334553;
+      background: transparent;
+      cursor: pointer;
+      height: 30px;
+    }
+
+    .event-form-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .event-form-actions-left {
+      display: flex;
+      gap: 6px;
+    }
+
+    .event-form-actions-right {
+      display: flex;
+      gap: 6px;
+    }
+
+    .event-form-status {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .event-filters {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .event-filters input {
+      flex: 1;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .app-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .top-right {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .day-events {
+        max-height: 200px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <div id="app-container">
+  <div class="app-shell">
     <!-- Top bar -->
     <header class="top-bar">
-      <div class="logo-wrapper">
-        <img src="logo.png" alt="Logo" class="logo" />
-        <span class="app-title">Calendário Dinastia</span>
+      <div class="top-left">
+        <div class="logo">
+          <img src="logo.png" alt="Logo" />
+        </div>
+        <div class="app-title">
+          <div class="app-title-main">Calendário de Gastos</div>
+          <div class="app-title-sub">Dez 2025 – Dez 2026</div>
+        </div>
       </div>
-
-      <div class="auth-status">
-        <span id="auth-email"></span>
-        <button id="logout-btn" class="btn small hidden">Logout</button>
+      <div class="top-right">
+        <div class="daily-summary-quick" id="limit-summary">
+          <span>Limite diário: <strong id="qs-limit-total">–</strong></span>
+          <span>Usado: <strong id="qs-limit-used">–</strong></span>
+          <span>Restante: <strong id="qs-limit-remaining">–</strong></span>
+        </div>
+        <div class="auth-status" id="auth-status-text">
+          Não autenticado
+        </div>
+        <button id="sign-out-btn" class="btn-outline" style="display:none;">Sair</button>
       </div>
     </header>
 
-    <!-- Auth container -->
-    <main id="auth-container">
-      <div class="auth-box">
-        <h2>Login</h2>
-        <label>
-          <span>Email</span>
-          <input type="email" id="auth-email-input" />
-        </label>
-        <label>
-          <span>Senha</span>
-          <input type="password" id="auth-password-input" />
-        </label>
-        <div class="auth-buttons">
-          <button id="login-btn" class="btn primary">Login</button>
-          <button id="signup-btn" class="btn secondary">Sign up</button>
-        </div>
-        <div id="auth-message" class="auth-message"></div>
-      </div>
-    </main>
-
-    <!-- Calendar + summary container (hidden until auth) -->
-    <main id="main-container" class="hidden">
-      <section class="calendar-section">
-        <div class="calendar-header">
-          <button id="prev-month-btn" class="btn icon">&lt;</button>
-          <h2 id="month-label"></h2>
-          <button id="next-month-btn" class="btn icon">&gt;</button>
-        </div>
-        <div class="calendar-grid">
-          <div class="calendar-weekdays">
-            <div>Dom</div>
-            <div>Seg</div>
-            <div>Ter</div>
-            <div>Qua</div>
-            <div>Qui</div>
-            <div>Sex</div>
-            <div>Sab</div>
+    <!-- Main content -->
+    <main class="main-content">
+      <!-- Auth view -->
+      <section id="auth-view">
+        <div class="card auth-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Entrar na sua conta</div>
+              <div class="card-sub">Autenticação via Supabase (email e senha)</div>
+            </div>
           </div>
-          <div id="calendar-days" class="calendar-days"></div>
+          <div class="auth-tabs">
+            <div class="auth-tab active" data-mode="signin">Entrar</div>
+            <div class="auth-tab" data-mode="signup">Registrar</div>
+          </div>
+          <form id="auth-form" class="auth-form">
+            <div class="form-group">
+              <label for="auth-email">Email</label>
+              <input type="email" id="auth-email" required autocomplete="email" />
+            </div>
+            <div class="form-group">
+              <label for="auth-password">Senha</label>
+              <input type="password" id="auth-password" required autocomplete="current-password" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" id="auth-submit-btn">Entrar</button>
+            </div>
+            <div id="auth-error" class="auth-error"></div>
+          </form>
         </div>
       </section>
 
-      <aside class="summary-section">
-        <div class="summary-header">
-          <div>
-            <h3 id="selected-date-label">Selecione uma data</h3>
-            <div class="limit-line">
-              <span class="label">Limite diário:</span>
-              <span id="daily-limit"></span>
+      <!-- App view -->
+      <section id="app-view">
+        <div class="app-container">
+          <!-- Calendar card -->
+          <div class="card" id="calendar-card">
+            <div class="calendar-header">
+              <button id="prev-month-btn" class="month-button">&lt;</button>
+              <div class="month-name" id="month-name"></div>
+              <button id="next-month-btn" class="month-button">&gt;</button>
+            </div>
+            <div class="calendar-grid" id="calendar-grid">
+              <!-- Cabeçalhos de dias e células serão renderizados via JS -->
             </div>
           </div>
-          <div class="totals">
-            <div><span class="label">Total:</span> <span id="total-amount">0</span></div>
-            <div><span class="label">Utilizado:</span> <span id="used-amount">0</span></div>
-            <div><span class="label">Restante:</span> <span id="remaining-amount">0</span></div>
+
+          <!-- Day summary card -->
+          <div class="card">
+            <div class="day-summary-header">
+              <div>
+                <div class="day-summary-date" id="day-summary-date">Nenhum dia selecionado</div>
+                <div class="card-sub" id="day-summary-helper">
+                  Clique em um dia no calendário para ver e editar os eventos.
+                </div>
+              </div>
+              <div class="day-summary-meta">
+                <div>Limite: <strong id="day-limit-total">–</strong></div>
+                <div>Usado: <strong id="day-limit-used">–</strong></div>
+                <div>Restante: <strong id="day-limit-remaining">–</strong></div>
+              </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="event-filters">
+              <input id="filter-name" type="text" placeholder="Filtrar por nome">
+              <select id="filter-status">
+                <option value="all">Todos</option>
+                <option value="done">Pagos</option>
+                <option value="pending">Pendentes</option>
+              </select>
+            </div>
+
+            <div class="day-events" id="day-events-list"></div>
+
+            <!-- Add / edit event form -->
+            <form id="event-form" class="event-form">
+              <div class="card-sub">Adicionar / editar evento</div>
+              <div class="event-form-row">
+                <div class="form-group">
+                  <label for="event-name">Nome</label>
+                  <input type="text" id="event-name" required />
+                </div>
+                <div class="form-group">
+                  <label for="event-value">Valor</label>
+                  <input type="number" id="event-value" required step="0.01" />
+                </div>
+              </div>
+              <div class="event-form-color-row">
+                <div class="form-group" style="flex:1;">
+                  <label for="event-color">Cor (hex)</label>
+                  <input type="text" id="event-color" placeholder="#00c2ff" />
+                </div>
+                <div class="form-group" style="width:50px;">
+                  <label style="font-size:10px;">Escolher</label>
+                  <input type="color" id="event-color-picker" />
+                </div>
+              </div>
+              <div class="event-form-actions">
+                <div class="event-form-actions-left">
+                  <button type="submit" id="event-save-btn">Adicionar evento</button>
+                  <button type="button" id="event-toggle-done-btn" class="btn-ghost" style="display:none;">
+                    Marcar como pago
+                  </button>
+                  <button type="button" id="event-delete-btn" class="btn-danger" style="display:none;">
+                    Excluir
+                  </button>
+                </div>
+                <div class="event-form-actions-right">
+                  <button type="button" id="event-reset-btn" class="btn-outline">
+                    Limpar
+                  </button>
+                </div>
+              </div>
+              <div class="event-form-status" id="event-form-status">
+                Nenhum evento selecionado. Clique em um evento para editar ou crie um novo.
+              </div>
+            </form>
           </div>
         </div>
-
-        <div class="day-events">
-          <h4>Resumo do dia</h4>
-          <ul id="day-events-list"></ul>
-        </div>
-
-        <div class="add-event-box">
-          <h4 id="event-form-title">Adicionar evento</h4>
-          <label>
-            <span>Nome</span>
-            <input type="text" id="event-name-input" />
-          </label>
-          <label>
-            <span>Valor</span>
-            <input type="number" id="event-value-input" step="0.01" />
-          </label>
-          <label>
-            <span>Cor</span>
-            <input type="color" id="event-color-input" value="#4caf50" />
-          </label>
-          <div class="event-form-buttons">
-            <button id="save-event-btn" class="btn primary">Salvar</button>
-            <button id="cancel-edit-btn" class="btn secondary hidden">Cancelar</button>
-          </div>
-          <div id="event-form-message" class="auth-message"></div>
-        </div>
-      </aside>
+      </section>
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script>
+    // PARTE 2 DO CÓDIGO VEM AQUI
+    // -----------------------------
+    // CONFIGURAÇÕES
+    // -----------------------------
+
+    // Limite diário (fácil de editar)
+    const DAILY_LIMIT = 6000000;
+
+    // Configuração do Supabase — substitua pelos seus dados
+    const SUPABASE_URL = "https://SEU-PROJETO.supabase.co";
+    const SUPABASE_ANON_KEY = "SUA-CHAVE-ANON";
+
+    // Inicializa cliente Supabase
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Intervalo do calendário: Dez 2025 → Dez 2026
+    const MIN_DATE = new Date(2025, 11, 1);
+    const MAX_DATE = new Date(2026, 11, 31);
+
+    const MONTH_NAMES = [
+      "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+      "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"
+    ];
+
+    const WEEKDAY_NAMES = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
+    // -----------------------------
+    // ESTADO GLOBAL
+    // -----------------------------
+
+    let currentUser = null;
+    let currentMonth = new Date(2025, 11, 1);
+    let selectedDate = null;
+    let eventsByDate = new Map();
+    let selectedEventId = null;
+
+    // -----------------------------
+    // FUNÇÕES UTILITÁRIAS
+    // -----------------------------
+
+    function formatDateKey(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+
+    function parseDateKey(key) {
+      const [y, m, d] = key.split("-").map(Number);
+      return new Date(y, m - 1, d);
+    }
+
+    function clampToRange(date) {
+      if (date < MIN_DATE) return new Date(MIN_DATE);
+      if (date > MAX_DATE) return new Date(MAX_DATE);
+      return date;
+    }
+
+    function isSameDay(a, b) {
+      return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+      );
+    }
+
+    function formatCurrency(value) {
+      return new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+        maximumFractionDigits: 2
+      }).format(value);
+    }
+
+    function getEventsForDate(date) {
+      const key = formatDateKey(date);
+      return eventsByDate.get(key) || [];
+    }
+
+    function sumEventsValue(events) {
+      return events.reduce((sum, e) => sum + Number(e.value || 0), 0);
+    }
+
+    function normalizeName(name) {
+      return (name || "").trim().toLowerCase();
+    }
+
+    // -----------------------------
+    // AUTENTICAÇÃO
+    // -----------------------------
+
+    const authView = document.getElementById("auth-view");
+    const appView = document.getElementById("app-view");
+    const authTabs = document.querySelectorAll(".auth-tab");
+    const authForm = document.getElementById("auth-form");
+    const authEmailInput = document.getElementById("auth-email");
+    const authPasswordInput = document.getElementById("auth-password");
+    const authSubmitBtn = document.getElementById("auth-submit-btn");
+    const authErrorEl = document.getElementById("auth-error");
+    const authStatusText = document.getElementById("auth-status-text");
+    const signOutBtn = document.getElementById("sign-out-btn");
+
+    let authMode = "signin";
+
+    authTabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        authTabs.forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        authMode = tab.dataset.mode;
+        authSubmitBtn.textContent = authMode === "signin" ? "Entrar" : "Registrar";
+        authErrorEl.textContent = "";
+      });
+    });
+
+    authForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      authErrorEl.textContent = "";
+
+      const email = authEmailInput.value.trim();
+      const password = authPasswordInput.value.trim();
+
+      if (!email || !password) return;
+
+      authSubmitBtn.disabled = true;
+      authSubmitBtn.textContent = authMode === "signin" ? "Entrando..." : "Registrando...";
+
+      try {
+        if (authMode === "signin") {
+          const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+        } else {
+          const { error } = await supabaseClient.auth.signUp({ email, password });
+          if (error) throw error;
+        }
+      } catch (err) {
+        authErrorEl.textContent = err.message || "Erro ao autenticar.";
+      } finally {
+        authSubmitBtn.disabled = false;
+        authSubmitBtn.textContent = authMode === "signin" ? "Entrar" : "Registrar";
+      }
+    });
+
+    signOutBtn.addEventListener("click", async () => {
+      await supabaseClient.auth.signOut();
+    });
+
+    async function handleAuthChange(session) {
+      currentUser = session ? session.user : null;
+
+      if (currentUser) {
+        authView.style.display = "none";
+        appView.style.display = "block";
+        authStatusText.textContent = currentUser.email || "Autenticado";
+        signOutBtn.style.display = "inline-flex";
+        await loadAllEvents();
+      } else {
+        authView.style.display = "flex";
+        appView.style.display = "none";
+        authStatusText.textContent = "Não autenticado";
+        signOutBtn.style.display = "none";
+        eventsByDate.clear();
+        renderCalendar();
+      }
+
+      updateQuickLimitSummary();
+    }
+
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      handleAuthChange(session);
+    });
+
+    // -----------------------------
+    // CARREGAR / SALVAR EVENTOS
+    // -----------------------------
+
+    async function loadAllEvents() {
+      const { data, error } = await supabaseClient
+        .from("events")
+        .select("*")
+        .order("date", { ascending: true });
+
+      if (error) {
+        console.error("Erro ao carregar eventos:", error);
+        return;
+      }
+
+      eventsByDate.clear();
+
+      data.forEach(evt => {
+        const key = evt.date;
+        if (!eventsByDate.has(key)) eventsByDate.set(key, []);
+        eventsByDate.get(key).push(evt);
+      });
+
+      renderCalendar();
+      if (selectedDate) renderDaySummary(selectedDate);
+    }
+
+    async function saveEvent({ id, date, name, value, color, done }) {
+      const dateKey = typeof date === "string" ? date : formatDateKey(date);
+
+      if (!id) {
+        // Inserir
+        const { data, error } = await supabaseClient
+          .from("events")
+          .insert({ date: dateKey, name, value, color, done: !!done })
+          .select("*")
+          .single();
+
+        if (error) throw error;
+
+        const key = data.date;
+        if (!eventsByDate.has(key)) eventsByDate.set(key, []);
+        eventsByDate.get(key).push(data);
+
+        await propagateColorByName(name, color);
+      } else {
+        // Atualizar
+        const { data, error } = await supabaseClient
+          .from("events")
+          .update({ date: dateKey, name, value, color, done: !!done })
+          .eq("id", id)
+          .select("*")
+          .single();
+
+        if (error) throw error;
+
+        // Remove de onde estava
+        eventsByDate.forEach((arr, key) => {
+          const idx = arr.findIndex(e => e.id === id);
+          if (idx >= 0) arr.splice(idx, 1);
+          if (arr.length === 0) eventsByDate.delete(key);
+        });
+
+        // Adiciona no novo dia
+        const newKey = data.date;
+        if (!eventsByDate.has(newKey)) eventsByDate.set(newKey, []);
+        eventsByDate.get(newKey).push(data);
+
+        await propagateColorByName(name, color);
+      }
+    }
+
+    async function propagateColorByName(name, color) {
+      const { error } = await supabaseClient
+        .from("events")
+        .update({ color })
+        .ilike("name", name);
+
+      if (error) console.error("Erro ao propagar cor:", error);
+
+      await loadAllEvents();
+    }
+
+    async function toggleDone(eventId, done) {
+      const { data, error } = await supabaseClient
+        .from("events")
+        .update({ done })
+        .eq("id", eventId)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      eventsByDate.forEach((arr, key) => {
+        const idx = arr.findIndex(e => e.id === eventId);
+        if (idx >= 0) arr[idx] = data;
+      });
+
+      renderCalendar();
+      if (selectedDate) renderDaySummary(selectedDate);
+    }
+
+    async function deleteEvent(eventId) {
+      const { error } = await supabaseClient
+        .from("events")
+        .delete()
+        .eq("id", eventId);
+
+      if (error) throw error;
+
+      eventsByDate.forEach((arr, key) => {
+        const idx = arr.findIndex(e => e.id === eventId);
+        if (idx >= 0) arr.splice(idx, 1);
+        if (arr.length === 0) eventsByDate.delete(key);
+      });
+
+      renderCalendar();
+      if (selectedDate) renderDaySummary(selectedDate);
+    }
+
+    // -----------------------------
+    // RENDERIZAÇÃO DO CALENDÁRIO
+    // -----------------------------
+
+    const calendarGridEl = document.getElementById("calendar-grid");
+    const monthNameEl = document.getElementById("month-name");
+    const prevMonthBtn = document.getElementById("prev-month-btn");
+    const nextMonthBtn = document.getElementById("next-month-btn");
+
+    function buildCalendarHeader() {
+      calendarGridEl.innerHTML = "";
+      WEEKDAY_NAMES.forEach(d => {
+        const div = document.createElement("div");
+        div.className = "weekday";
+        div.textContent = d;
+        calendarGridEl.appendChild(div);
+      });
+    }
+
+    function renderCalendar() {
+      buildCalendarHeader();
+
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+
+      monthNameEl.textContent = `${MONTH_NAMES[month]} ${year}`;
+
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+
+      const startWeekday = firstDay.getDay();
+      const totalDays = lastDay.getDate();
+
+      const prevMonthDate = new Date(year, month - 1, 1);
+      const nextMonthDate = new Date(year, month + 1, 1);
+
+      prevMonthBtn.disabled = prevMonthDate < new Date(MIN_DATE.getFullYear(), MIN_DATE.getMonth(), 1);
+      nextMonthBtn.disabled = nextMonthDate > new Date(MAX_DATE.getFullYear(), MAX_DATE.getMonth(), 1);
+
+      // Células vazias antes do dia 1
+      for (let i = 0; i < startWeekday; i++) {
+        const cell = document.createElement("div");
+        cell.className = "day-cell inactive";
+        calendarGridEl.appendChild(cell);
+      }
+
+      // Dias do mês
+      for (let day = 1; day <= totalDays; day++) {
+        const date = new Date(year, month, day);
+        const cell = document.createElement("div");
+        cell.className = "day-cell";
+
+        if (date < MIN_DATE || date > MAX_DATE) {
+          cell.classList.add("inactive");
+        } else {
+          cell.addEventListener("click", () => selectDate(date));
+        }
+
+        if (selectedDate && isSameDay(date, selectedDate)) {
+          cell.classList.add("selected");
+        }
+
+        const dayNumberRow = document.createElement("div");
+        dayNumberRow.className = "day-number-row";
+
+        const dayNumber = document.createElement("div");
+        dayNumber.className = "day-number";
+        dayNumber.textContent = day;
+
+        const events = getEventsForDate(date);
+        const totalValue = sumEventsValue(events);
+
+        const dayTotalEl = document.createElement("div");
+        dayTotalEl.className = "day-total";
+        if (events.length > 0) {
+          dayTotalEl.textContent = formatCurrency(totalValue);
+        }
+
+        dayNumberRow.appendChild(dayNumber);
+        dayNumberRow.appendChild(dayTotalEl);
+        cell.appendChild(dayNumberRow);
+
+        // Pílulas de eventos
+        events.forEach(evt => {
+          const pill = document.createElement("div");
+          pill.className = "event-pill";
+          if (evt.done) pill.classList.add("done");
+
+          pill.addEventListener("click", (e) => {
+            e.stopPropagation();
+            selectDate(date);
+            selectEvent(evt);
+          });
+
+          const dot = document.createElement("div");
+          dot.className = "event-pill-dot";
+          dot.style.backgroundColor = evt.color || "#00c2ff";
+
+          const text = document.createElement("span");
+          text.textContent = `${evt.name} ${formatCurrency(evt.value)}`;
+
+          pill.appendChild(dot);
+          pill.appendChild(text);
+          cell.appendChild(pill);
+        });
+
+        calendarGridEl.appendChild(cell);
+      }
+
+      updateQuickLimitSummary();
+    }
+
+    prevMonthBtn.addEventListener("click", () => {
+      currentMonth = clampToRange(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+      renderCalendar();
+    });
+
+    nextMonthBtn.addEventListener("click", () => {
+      currentMonth = clampToRange(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+      renderCalendar();
+    });
+
+    function selectDate(date) {
+      selectedDate = clampToRange(date);
+      renderCalendar();
+      renderDaySummary(selectedDate);
+    }
+    // -----------------------------
+    // RESUMO DO DIA (LADO DIREITO)
+    // -----------------------------
+
+    const daySummaryDateEl = document.getElementById("day-summary-date");
+    const daySummaryHelperEl = document.getElementById("day-summary-helper");
+    const dayEventsListEl = document.getElementById("day-events-list");
+    const dayLimitTotalEl = document.getElementById("day-limit-total");
+    const dayLimitUsedEl = document.getElementById("day-limit-used");
+    const dayLimitRemainingEl = document.getElementById("day-limit-remaining");
+
+    const qsLimitTotalEl = document.getElementById("qs-limit-total");
+    const qsLimitUsedEl = document.getElementById("qs-limit-used");
+    const qsLimitRemainingEl = document.getElementById("qs-limit-remaining");
+
+    const filterNameInput = document.getElementById("filter-name");
+    const filterStatusSelect = document.getElementById("filter-status");
+
+    filterNameInput.addEventListener("input", () => {
+      if (selectedDate) renderDaySummary(selectedDate);
+    });
+
+    filterStatusSelect.addEventListener("change", () => {
+      if (selectedDate) renderDaySummary(selectedDate);
+    });
+
+    function renderDaySummary(date) {
+      if (!date) {
+        daySummaryDateEl.textContent = "Nenhum dia selecionado";
+        daySummaryHelperEl.textContent = "Clique em um dia no calendário para ver e editar os eventos.";
+        dayEventsListEl.innerHTML = "";
+        dayLimitTotalEl.textContent = "–";
+        dayLimitUsedEl.textContent = "–";
+        dayLimitRemainingEl.textContent = "–";
+        return;
+      }
+
+      daySummaryDateEl.textContent = date.toLocaleDateString("pt-BR", {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
+      });
+
+      daySummaryHelperEl.textContent = "Resumo dos eventos deste dia.";
+
+      let events = getEventsForDate(date);
+
+      // FILTRO POR NOME
+      const nameFilter = filterNameInput.value.trim().toLowerCase();
+      if (nameFilter) {
+        events = events.filter(e => e.name.toLowerCase().includes(nameFilter));
+      }
+
+      // FILTRO POR STATUS
+      const status = filterStatusSelect.value;
+      if (status === "done") {
+        events = events.filter(e => e.done);
+      } else if (status === "pending") {
+        events = events.filter(e => !e.done);
+      }
+
+      const total = DAILY_LIMIT;
+      const used = sumEventsValue(events);
+      const remaining = total - used;
+
+      dayLimitTotalEl.textContent = formatCurrency(total);
+      dayLimitUsedEl.textContent = formatCurrency(used);
+      dayLimitRemainingEl.textContent = formatCurrency(remaining);
+
+      dayEventsListEl.innerHTML = "";
+
+      if (events.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "card-sub";
+        empty.textContent = "Nenhum evento encontrado.";
+        dayEventsListEl.appendChild(empty);
+      } else {
+        events.forEach(evt => {
+          const item = document.createElement("div");
+          item.className = "day-event-item";
+
+          const main = document.createElement("div");
+          main.className = "day-event-main";
+
+          const nameRow = document.createElement("div");
+          nameRow.className = "day-event-name";
+          if (evt.done) nameRow.classList.add("done");
+
+          const dot = document.createElement("div");
+          dot.className = "dot";
+          dot.style.backgroundColor = evt.color || "#00c2ff";
+
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = evt.name;
+
+          nameRow.appendChild(dot);
+          nameRow.appendChild(nameSpan);
+
+          const valueRow = document.createElement("div");
+          valueRow.className = "day-event-value";
+          valueRow.textContent = formatCurrency(evt.value);
+
+          main.appendChild(nameRow);
+          main.appendChild(valueRow);
+
+          const actions = document.createElement("div");
+          actions.className = "day-event-actions";
+
+          const editBtn = document.createElement("button");
+          editBtn.type = "button";
+          editBtn.className = "btn-ghost";
+          editBtn.textContent = "Editar";
+          editBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            selectEvent(evt);
+          });
+
+          const doneBtn = document.createElement("button");
+          doneBtn.type = "button";
+          doneBtn.className = "btn-ghost";
+          doneBtn.textContent = evt.done ? "Marcar como pendente" : "Marcar como pago";
+          doneBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            await toggleDone(evt.id, !evt.done);
+            if (selectedEventId === evt.id) {
+              const updated = getEventsForDate(parseDateKey(evt.date)).find(e => e.id === evt.id);
+              if (updated) selectEvent(updated);
+            }
+          });
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.className = "btn-danger";
+          deleteBtn.textContent = "Excluir";
+          deleteBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!confirm("Deseja realmente excluir este evento?")) return;
+            await deleteEvent(evt.id);
+            if (selectedEventId === evt.id) resetEventForm();
+          });
+
+          actions.appendChild(editBtn);
+          actions.appendChild(doneBtn);
+          actions.appendChild(deleteBtn);
+
+          item.addEventListener("click", () => selectEvent(evt));
+
+          item.appendChild(main);
+          item.appendChild(actions);
+          dayEventsListEl.appendChild(item);
+        });
+      }
+
+      updateQuickLimitSummary();
+    }
+
+    function updateQuickLimitSummary() {
+      if (!selectedDate) {
+        qsLimitTotalEl.textContent = formatCurrency(DAILY_LIMIT);
+        qsLimitUsedEl.textContent = "–";
+        qsLimitRemainingEl.textContent = "–";
+        return;
+      }
+
+      const events = getEventsForDate(selectedDate);
+      const total = DAILY_LIMIT;
+      const used = sumEventsValue(events);
+      const remaining = total - used;
+
+      qsLimitTotalEl.textContent = formatCurrency(total);
+      qsLimitUsedEl.textContent = formatCurrency(used);
+      qsLimitRemainingEl.textContent = formatCurrency(remaining);
+    }
+
+    // -----------------------------
+    // FORMULÁRIO DE EVENTO
+    // -----------------------------
+
+    const eventForm = document.getElementById("event-form");
+    const eventNameInput = document.getElementById("event-name");
+    const eventValueInput = document.getElementById("event-value");
+    const eventColorInput = document.getElementById("event-color");
+    const eventColorPicker = document.getElementById("event-color-picker");
+    const eventSaveBtn = document.getElementById("event-save-btn");
+    const eventToggleDoneBtn = document.getElementById("event-toggle-done-btn");
+    const eventDeleteBtn = document.getElementById("event-delete-btn");
+    const eventResetBtn = document.getElementById("event-reset-btn");
+    const eventFormStatusEl = document.getElementById("event-form-status");
+
+    let currentEditingEvent = null;
+
+    eventColorPicker.addEventListener("input", () => {
+      eventColorInput.value = eventColorPicker.value;
+    });
+
+    eventColorInput.addEventListener("input", () => {
+      const v = eventColorInput.value.trim();
+      if (v.startsWith("#") && (v.length === 4 || v.length === 7)) {
+        eventColorPicker.value = v;
+      }
+    });
+
+    function resetEventForm() {
+      currentEditingEvent = null;
+      selectedEventId = null;
+      eventForm.reset();
+      eventColorInput.value = "#00c2ff";
+      eventColorPicker.value = "#00c2ff";
+      eventSaveBtn.textContent = "Adicionar evento";
+      eventToggleDoneBtn.style.display = "none";
+      eventDeleteBtn.style.display = "none";
+      eventFormStatusEl.textContent =
+        "Nenhum evento selecionado. Clique em um evento para editar ou crie um novo.";
+    }
+
+    function selectEvent(evt) {
+      currentEditingEvent = evt;
+      selectedEventId = evt.id;
+
+      eventNameInput.value = evt.name;
+      eventValueInput.value = evt.value;
+      eventColorInput.value = evt.color || "#00c2ff";
+      eventColorPicker.value = evt.color || "#00c2ff";
+
+      eventSaveBtn.textContent = "Salvar alterações";
+      eventToggleDoneBtn.style.display = "inline-flex";
+      eventToggleDoneBtn.textContent = evt.done ? "Marcar como pendente" : "Marcar como pago";
+      eventDeleteBtn.style.display = "inline-flex";
+
+      eventFormStatusEl.textContent = `Editando evento: "${evt.name}"`;
+
+      if (!selectedDate || formatDateKey(selectedDate) !== evt.date) {
+        selectDate(parseDateKey(evt.date));
+      }
+    }
+
+    eventForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      if (!selectedDate) {
+        alert("Selecione um dia no calendário primeiro.");
+        return;
+      }
+
+      const name = eventNameInput.value.trim();
+      const value = Number(eventValueInput.value);
+      let color = eventColorInput.value.trim() || "#00c2ff";
+
+      if (!name) {
+        alert("O nome do evento é obrigatório.");
+        return;
+      }
+
+      if (isNaN(value)) {
+        alert("O valor do evento é obrigatório.");
+        return;
+      }
+
+      if (!color.startsWith("#")) {
+        color = "#" + color;
+      }
+
+      eventSaveBtn.disabled = true;
+      eventSaveBtn.textContent = currentEditingEvent ? "Salvando..." : "Adicionando...";
+
+      try {
+        await saveEvent({
+          id: currentEditingEvent ? currentEditingEvent.id : undefined,
+          date: selectedDate,
+          name,
+          value,
+          color,
+          done: currentEditingEvent ? currentEditingEvent.done : false
+        });
+
+        resetEventForm();
+        renderDaySummary(selectedDate);
+      } catch (err) {
+        console.error(err);
+        alert("Erro ao salvar evento: " + (err.message || "Erro desconhecido"));
+      } finally {
+        eventSaveBtn.disabled = false;
+        eventSaveBtn.textContent = currentEditingEvent ? "Salvar alterações" : "Adicionar evento";
+      }
+    });
+
+    eventToggleDoneBtn.addEventListener("click", async () => {
+      if (!currentEditingEvent) return;
+
+      await toggleDone(currentEditingEvent.id, !currentEditingEvent.done);
+
+      const updated = getEventsForDate(parseDateKey(currentEditingEvent.date)).find(
+        e => e.id === currentEditingEvent.id
+      );
+
+      if (updated) selectEvent(updated);
+      renderDaySummary(selectedDate);
+    });
+
+    eventDeleteBtn.addEventListener("click", async () => {
+      if (!currentEditingEvent) return;
+
+      if (!confirm("Deseja realmente excluir este evento?")) return;
+
+      await deleteEvent(currentEditingEvent.id);
+
+      resetEventForm();
+      renderDaySummary(selectedDate);
+    });
+
+    eventResetBtn.addEventListener("click", () => {
+      resetEventForm();
+    });
+
+    // -----------------------------
+    // INICIALIZAÇÃO
+    // -----------------------------
+
+    (async function init() {
+      renderCalendar();
+      resetEventForm();
+      updateQuickLimitSummary();
+
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      await handleAuthChange(session);
+    })();
+
+  </script>
 </body>
 </html>
