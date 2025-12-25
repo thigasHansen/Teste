@@ -297,6 +297,7 @@ function renderCalendar() {
       // Click on event pill: edit that event in modal
       pill.addEventListener("click", (e) => {
         e.stopPropagation(); // prevent day cell click
+        selectDate(new Date(ev.event_date));
         fillFormForEvent(ev);
         openModal(true);
       });
@@ -679,6 +680,7 @@ function renderDayEvents(iso) {
 
     row.addEventListener("click", async (e) => {
       e.stopPropagation(); // prevent calendar cell click
+      selectDate(new Date(ev.event_date));
       if (e.metaKey || e.ctrlKey) {
         const yes = confirm("Delete this event?");
         if (yes) {
