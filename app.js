@@ -5,699 +5,603 @@
 const SUPABASE_URL = "https://tecbuwpdhhlbzgjadego.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_DDNV8FDFpgYoEelsTk0zbQ_AL7oePju";
 
-// Daily limit (same for all days)
+// Daily limit (easy to change)
 const DAILY_LIMIT = 6000000;
 
-// Allowed calendar range (inclusive)
+// Calendar range: December 2025 to December 2026 (inclusive)
 const START_YEAR = 2025;
-const START_MONTH = 11; // 0-based: 11 = December 2025
+const START_MONTH = 11; // 0-based: 11 = December
 const END_YEAR = 2026;
-const END_MONTH = 11; // 0-based: 11 = December 2026
+const END_MONTH = 11;   // 0-based: 11 = December
 
-// ======================
-// SUPABASE INIT
-// ======================
+// =======================
+// Supabase client
+// =======================
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ======================
-// STATE
-// ======================
+// =======================
+// DOM elements
+// =======================
 
-let currentUser = null;
-let currentMonth = START_MONTH;
+const authContainer = document.getElementById('auth-container');
+const mainContainer = document.getElementById('main-container');
+const authEmailLabel = document.getElementById('auth-email');
+const logoutBtn = document.getElementById('logout-btn');
+
+const loginBtn = document.getElementById('login-btn');
+const signupBtn = document.getElementById('signup-btn');
+const authEmailInput = document.getElementById('auth-email-input');
+const authPasswordInput = document.getElementById('auth-password-input');
+const authMessage = document.getElementById('auth-message');
+
+const monthLabel = document.getElementById('month-label');
+const prevMonthBtn = document.getElementById('prev-month-btn');
+const nextMonthBtn = document.getElementById('next-month-btn');
+const calendarDaysContainer = document.getElementById('calendar-days');
+
+const selectedDateLabel = document.getElementById('selected-date-label');
+const dailyLimitLabel = document.getElementById('daily-limit');
+const totalAmountLabel = document.getElementById('total-amount');
+const usedAmountLabel = document.getElementById('used-amount');
+const remainingAmountLabel = document.getElementById('remaining-amount');
+
+const dayEventsList = document.getElementById('day-events-list');
+const eventFormTitle = document.getElementById('event-form-title');
+const eventNameInput = document.getElementById('event-name-input');
+const eventValueInput = document.getElementById('event-value-input');
+const eventColorInput = document.getElementById('event-color-input');
+const saveEventBtn = document.getElementById('save-event-btn');
+const cancelEditBtn = document.getElementById('cancel-edit-btn');
+const eventFormMessage = document.getElementById('event-form-message');
+
+// =======================
+// State
+// =======================
+
 let currentYear = START_YEAR;
-let selectedDate = new Date(START_YEAR, START_MONTH, 1);
+let currentMonth = START_MONTH; // 0-based
+let selectedDate = null; // string 'YYYY-MM-DD'
 
-// Cache of all events keyed by ISO date string "YYYY-MM-DD"
-const eventsByDate = new Map();
+// Cache all events loaded (for the whole range)
+let allEvents = [];
 
-// Name → color map (lowercase name as key)
-const nameColorMap = new Map();
+// Editing state
+let editingEventId = null;
 
-// ======================
-// DOM ELEMENTS
-// ======================
+// =======================
+// Helpers
+// =======================
 
-const authContainer = document.getElementById("auth-container");
-const authForm = document.getElementById("auth-form");
-const authEmail = document.getElementById("auth-email");
-const authPassword = document.getElementById("auth-password");
-const authMessage = document.getElementById("auth-message");
-const loginBtn = document.getElementById("login-btn");
-const signupBtn = document.getElementById("signup-btn");
-
-const calendarContainer = document.getElementById("calendar-container");
-const monthLabel = document.getElementById("month-label");
-const prevMonthBtn = document.getElementById("prev-month-btn");
-const nextMonthBtn = document.getElementById("next-month-btn");
-const calendarDays = document.getElementById("calendar-days");
-
-const logoutBtn = document.getElementById("logout-btn");
-const addEventBtn = document.getElementById("add-event-btn");
-
-const summaryDate = document.getElementById("summary-date");
-const summaryLimit = document.getElementById("summary-limit");
-const summaryUsed = document.getElementById("summary-used");
-const summaryRemaining = document.getElementById("summary-remaining");
-
-const dayEventsList = document.getElementById("day-events-list");
-
-// Modal elements
-const eventModal = document.getElementById("event-modal");
-const modalClose = document.getElementById("modal-close");
-const modalTitle = document.getElementById("modal-title");
-
-const eventForm = document.getElementById("event-form");
-const eventDateDisplay = document.getElementById("event-date-display");
-const eventNameInput = document.getElementById("event-name");
-const eventValueInput = document.getElementById("event-value");
-const eventColorInput = document.getElementById("event-color");
-const eventDoneInput = document.getElementById("event-done");
-const eventIdInput = document.getElementById("event-id");
-const deleteEventBtn = document.getElementById("delete-event-btn");
-
-// ======================
-// UTILITIES
-// ======================
-
-function toISODate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function formatDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
-function formatDisplayDate(date) {
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+function parseDateKey(dateString) {
+  const [y, m, d] = dateString.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
-function withinRange(year, month) {
-  const start = new Date(START_YEAR, START_MONTH, 1);
-  const end = new Date(END_YEAR, END_MONTH + 1, 0); // inclusive
-  const cur = new Date(year, month, 1);
-  return (
-    cur >= new Date(start.getFullYear(), start.getMonth(), 1) &&
-    cur <= new Date(end.getFullYear(), end.getMonth(), 1)
-  );
+function monthInRange(year, monthIndex) {
+  if (year < START_YEAR || year > END_YEAR) return false;
+  if (year === START_YEAR && monthIndex < START_MONTH) return false;
+  if (year === END_YEAR && monthIndex > END_MONTH) return false;
+  return true;
 }
 
-function clampMonthYear(year, month) {
-  const startIndex = START_YEAR * 12 + START_MONTH;
-  const endIndex = END_YEAR * 12 + END_MONTH;
-  let idx = year * 12 + month;
-  if (idx < startIndex) idx = startIndex;
-  if (idx > endIndex) idx = endIndex;
-  return [Math.floor(idx / 12), idx % 12];
+function normalizeName(name) {
+  return name.trim().toLowerCase();
 }
 
-// ======================
-// MODAL
-// ======================
-
-function openModal(isEdit = false) {
-  modalTitle.textContent = isEdit ? "Edit Event" : "Add Event";
-  deleteEventBtn.classList.toggle("hidden", !isEdit);
-  eventModal.classList.remove("hidden");
+function formatCurrency(value) {
+  const n = Number(value || 0);
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function closeModal() {
-  eventModal.classList.add("hidden");
-  clearEventForm();
-}
+// =======================
+// Auth logic
+// =======================
 
-modalClose.addEventListener("click", closeModal);
-
-eventModal.addEventListener("click", (e) => {
-  if (e.target === eventModal) {
-    closeModal();
-  }
-});
-
-// ======================
-// AUTH HANDLERS
-// ======================
-
-async function checkAuthOnLoad() {
-  const { data } = await supabaseClient.auth.getSession();
-  if (data && data.session) {
-    currentUser = data.session.user;
-    showCalendar();
-  } else {
-    showAuth();
-  }
-}
-
-function showAuth() {
-  authContainer.classList.remove("hidden");
-  calendarContainer.classList.add("hidden");
-}
-
-function showCalendar() {
-  authContainer.classList.add("hidden");
-  calendarContainer.classList.remove("hidden");
-  initCalendar();
-}
-
-authForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  authMessage.textContent = "";
-  const email = authEmail.value.trim();
-  const password = authPassword.value;
-
-  try {
-    loginBtn.disabled = true;
-    signupBtn.disabled = true;
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
-      authMessage.textContent = error.message;
-      return;
-    }
-    currentUser = data.user;
-    showCalendar();
-  } finally {
-    loginBtn.disabled = false;
-    signupBtn.disabled = false;
-  }
-});
-
-signupBtn.addEventListener("click", async () => {
-  authMessage.textContent = "";
-  const email = authEmail.value.trim();
-  const password = authPassword.value;
+async function handleLogin() {
+  authMessage.textContent = '';
+  const email = authEmailInput.value.trim();
+  const password = authPasswordInput.value;
 
   if (!email || !password) {
-    authMessage.textContent = "Email and password are required.";
+    authMessage.textContent = 'Please fill in email and password.';
     return;
   }
 
-  try {
-    loginBtn.disabled = true;
-    signupBtn.disabled = true;
-    const { error } = await supabaseClient.auth.signUp({
-      email,
-      password,
-    });
-    if (error) {
-      authMessage.textContent = error.message;
-      return;
-    }
-    authMessage.textContent =
-      "Sign up successful. Check your email (if confirmation required), then log in.";
-  } finally {
-    loginBtn.disabled = false;
-    signupBtn.disabled = false;
-  }
-});
-
-logoutBtn.addEventListener("click", async () => {
-  await supabaseClient.auth.signOut();
-  currentUser = null;
-  eventsByDate.clear();
-  nameColorMap.clear();
-  showAuth();
-});
-
-// "Add Event" button near summary
-addEventBtn.addEventListener("click", () => {
-  clearEventForm();
-  updateEventFormDate();
-  openModal(false);
-});
-
-// ======================
-// CALENDAR RENDERING
-// ======================
-
-async function initCalendar() {
-  [currentYear, currentMonth] = clampMonthYear(currentYear, currentMonth);
-  selectedDate = new Date(currentYear, currentMonth, 1);
-
-  await loadAllEvents();
-
-  renderCalendar();
-  selectDate(new Date(currentYear, currentMonth, 1));
-}
-
-function renderCalendar() {
-  monthLabel.textContent = new Date(currentYear, currentMonth, 1).toLocaleDateString(
-    undefined,
-    { year: "numeric", month: "long" }
-  );
-
-  calendarDays.innerHTML = "";
-  const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
-  const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
-  const startWeekday = firstDayOfMonth.getDay();
-  const daysInMonth = lastDayOfMonth.getDate();
-
-  let gridStartDate = new Date(currentYear, currentMonth, 1 - startWeekday);
-
-  for (let i = 0; i < 42; i++) {
-    const dayDate = new Date(
-      gridStartDate.getFullYear(),
-      gridStartDate.getMonth(),
-      gridStartDate.getDate() + i
-    );
-
-    const dayDiv = document.createElement("div");
-    dayDiv.classList.add("calendar-day");
-    dayDiv.dataset.date = iso; // <-- store the REAL date
-
-    if (dayDate.getMonth() !== currentMonth) {
-      dayDiv.classList.add("outside-month");
-    }
-
-    if (!withinRange(dayDate.getFullYear(), dayDate.getMonth())) {
-      dayDiv.classList.add("outside-range");
-    }
-
-    const dayNumber = document.createElement("div");
-    dayNumber.classList.add("day-number");
-    dayNumber.textContent = dayDate.getDate();
-    dayDiv.appendChild(dayNumber);
-
-    const iso = toISODate(dayDate);
-    const dayEvents = eventsByDate.get(iso) || [];
-
-    for (const ev of dayEvents) {
-      const pill = document.createElement("div");
-      pill.classList.add("event-pill");
-      if (ev.done) pill.classList.add("done");
-      pill.style.backgroundColor = ev.color;
-      pill.innerHTML = `<span class="event-pill-check">${ev.done ? "✔" : "•"}</span><span>${ev.name}</span>`;
-
-      // Click on event pill: edit that event in modal
-      pill.addEventListener("click", (e) => {
-        e.stopPropagation(); // prevent day cell click
-        selectDate(new Date(ev.event_date));
-        fillFormForEvent(ev);
-        openModal(true);
-      });
-
-      dayDiv.appendChild(pill);
-    }
-
-    dayDiv.addEventListener("click", () => {
-      selectDate(
-        new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate())
-      );
-      clearEventForm();
-      openModal(false);
-    });
-
-    if (toISODate(dayDate) === toISODate(selectedDate)) {
-      dayDiv.classList.add("selected");
-    }
-
-    calendarDays.appendChild(dayDiv);
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    authMessage.textContent = `Login error: ${error.message}`;
+    return;
   }
 
-  updateNavButtons();
+  authMessage.textContent = 'Logged in successfully.';
 }
 
-function updateNavButtons() {
-  const [minYear, minMonth] = [START_YEAR, START_MONTH];
-  const [maxYear, maxMonth] = [END_YEAR, END_MONTH];
+async function handleSignup() {
+  authMessage.textContent = '';
+  const email = authEmailInput.value.trim();
+  const password = authPasswordInput.value;
 
-  const curIndex = currentYear * 12 + currentMonth;
-  const minIndex = minYear * 12 + minMonth;
-  const maxIndex = maxYear * 12 + maxMonth;
-
-  prevMonthBtn.disabled = curIndex <= minIndex;
-  nextMonthBtn.disabled = curIndex >= maxIndex;
-}
-
-prevMonthBtn.addEventListener("click", () => {
-  let year = currentYear;
-  let month = currentMonth - 1;
-  if (month < 0) {
-    month = 11;
-    year--;
+  if (!email || !password) {
+    authMessage.textContent = 'Please fill in email and password.';
+    return;
   }
-  [currentYear, currentMonth] = clampMonthYear(year, month);
-  renderCalendar();
-  selectDate(new Date(currentYear, currentMonth, 1));
-});
 
-nextMonthBtn.addEventListener("click", () => {
-  let year = currentYear;
-  let month = currentMonth + 1;
-  if (month > 11) {
-    month = 0;
-    year++;
+  const { error } = await supabase.auth.signUp({ email, password });
+  if (error) {
+    authMessage.textContent = `Sign up error: ${error.message}`;
+    return;
   }
-  [currentYear, currentMonth] = clampMonthYear(year, month);
-  renderCalendar();
-  selectDate(new Date(currentYear, currentMonth, 1));
-});
 
-// ======================
-// DATE SELECTION & SUMMARY
-// ======================
-
-function selectDate(dateObj) {
-  const iso = toISODate(dateObj);
-  selectedDate = dateObj;
-
-  // Clear previous selection
-  const dayNodes = Array.from(calendarDays.children);
-  dayNodes.forEach((node) => node.classList.remove("selected"));
-
-  // Highlight the correct cell using the stored ISO date
-  const match = dayNodes.find((node) => node.dataset.date === iso);
-  if (match) match.classList.add("selected");
-
-  updateSummaryForDate(iso);
-  updateEventFormDate();
-  renderDayEvents(iso);
+  authMessage.textContent = 'Sign up successful. Check your email if confirmation is required, then log in.';
 }
 
-function updateSummaryForDate(iso) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dateObj = new Date(y, m - 1, d);
-
-  const events = eventsByDate.get(iso) || [];
-  const used = events.reduce((sum, ev) => sum + Number(ev.value || 0), 0);
-  const remaining = DAILY_LIMIT - used;
-
-  summaryDate.textContent = formatDisplayDate(dateObj);
-  summaryLimit.textContent = DAILY_LIMIT.toLocaleString();
-  summaryUsed.textContent = used.toLocaleString();
-  summaryRemaining.textContent = remaining.toLocaleString();
+async function handleLogout() {
+  await supabase.auth.signOut();
 }
 
-function updateEventFormDate() {
-  eventDateDisplay.value = formatDisplayDate(selectedDate);
+async function refreshSessionUI() {
+  const { data } = await supabase.auth.getUser();
+  const user = data?.user ?? null;
+
+  if (user) {
+    authEmailLabel.textContent = user.email || '';
+    logoutBtn.classList.remove('hidden');
+    authContainer.classList.add('hidden');
+    mainContainer.classList.remove('hidden');
+    await loadAllEvents();
+    renderCalendar();
+    if (!selectedDate) {
+      // default to the first day of the start month
+      const defaultDate = new Date(START_YEAR, START_MONTH, 1);
+      selectedDate = formatDateKey(defaultDate);
+    }
+    updateSelectedDateUI();
+  } else {
+    authEmailLabel.textContent = '';
+    logoutBtn.classList.add('hidden');
+    authContainer.classList.remove('hidden');
+    mainContainer.classList.add('hidden');
+  }
 }
 
-// ======================
-// LOAD/SAVE EVENTS
-// ======================
+// =======================
+// Events data
+// =======================
 
+// Load all events within the configured calendar range
 async function loadAllEvents() {
-  const startDate = new Date(START_YEAR, START_MONTH, 1);
-  const endDate = new Date(END_YEAR, END_MONTH + 1, 0);
-  const startISO = toISODate(startDate);
-  const endISO = toISODate(endDate);
+  const from = `${START_YEAR}-${String(START_MONTH + 1).padStart(2, '0')}-01`;
+  const to = `${END_YEAR}-${String(END_MONTH + 1).padStart(2, '0')}-31`;
 
-  const { data, error } = await supabaseClient
-    .from("events")
-    .select("*")
-    .gte("event_date", startISO)
-    .lte("event_date", endISO)
-    .order("event_date", { ascending: true })
-    .order("inserted_at", { ascending: true });
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .gte('event_date', from)
+    .lte('event_date', to)
+    .order('event_date', { ascending: true })
+    .order('created_at', { ascending: true });
 
   if (error) {
-    console.error("Error loading events:", error);
+    console.error('Error loading events', error);
     return;
   }
 
-  eventsByDate.clear();
-  nameColorMap.clear();
-
-  for (const ev of data) {
-    const dateKey = ev.event_date;
-    if (!eventsByDate.has(dateKey)) {
-      eventsByDate.set(dateKey, []);
-    }
-    eventsByDate.get(dateKey).push(ev);
-
-    const keyName = ev.name.trim().toLowerCase();
-    if (keyName && !nameColorMap.has(keyName)) {
-      nameColorMap.set(keyName, ev.color);
-    }
-  }
+  allEvents = data || [];
 }
 
-async function saveEvent(evData) {
-  const isEdit = !!evData.id;
-
-  const normalizedName = evData.name.trim();
-  const nameKey = normalizedName.toLowerCase();
-
-  if (nameColorMap.has(nameKey)) {
-    evData.color = nameColorMap.get(nameKey);
-  } else {
-    nameColorMap.set(nameKey, evData.color);
-  }
-
-  if (isEdit) {
-    const { error } = await supabaseClient
-      .from("events")
-      .update({
-        event_date: evData.event_date,
-        name: normalizedName,
-        value: evData.value,
-        color: evData.color,
-        done: evData.done,
-      })
-      .eq("id", evData.id);
-
-    if (error) {
-      console.error("Update error:", error);
-      return;
-    }
-
-    propagateNameColorAndUpdate(
-      evData.id,
-      normalizedName,
-      evData.color,
-      evData.done,
-      evData.value,
-      evData.event_date
-    );
-  } else {
-    const { data, error } = await supabaseClient
-      .from("events")
-      .insert([
-        {
-          event_date: evData.event_date,
-          name: normalizedName,
-          value: evData.value,
-          color: evData.color,
-          done: evData.done,
-        },
-      ])
-      .select();
-
-    if (error) {
-      console.error("Insert error:", error);
-      return;
-    }
-
-    const inserted = data[0];
-    const dateKey = inserted.event_date;
-    if (!eventsByDate.has(dateKey)) {
-      eventsByDate.set(dateKey, []);
-    }
-    eventsByDate.get(dateKey).push(inserted);
-  }
-
-  const isoSelected = toISODate(selectedDate);
-  renderCalendar();
-  renderDayEvents(isoSelected);
-  updateSummaryForDate(isoSelected);
-}
-
-async function deleteEventById(eventId) {
-  const { error } = await supabaseClient
-    .from("events")
-    .delete()
-    .eq("id", eventId);
-
-  if (error) {
-    console.error("Delete error:", error);
+// Save new or existing event
+async function saveEvent() {
+  eventFormMessage.textContent = '';
+  if (!selectedDate) {
+    eventFormMessage.textContent = 'Select a day first.';
     return;
   }
 
-  for (const [dateKey, arr] of eventsByDate.entries()) {
-    const idx = arr.findIndex((ev) => ev.id === eventId);
-    if (idx !== -1) {
-      arr.splice(idx, 1);
-      if (arr.length === 0) {
-        eventsByDate.delete(dateKey);
-      }
-      break;
-    }
+  const rawName = eventNameInput.value;
+  const name = rawName.trim();
+  const value = Number(eventValueInput.value);
+  const color = eventColorInput.value || '#4caf50';
+
+  if (!name) {
+    eventFormMessage.textContent = 'Name is required.';
+    return;
+  }
+  if (Number.isNaN(value)) {
+    eventFormMessage.textContent = 'Value must be a number.';
+    return;
   }
 
-  const isoSelected = toISODate(selectedDate);
-  renderCalendar();
-  renderDayEvents(isoSelected);
-  updateSummaryForDate(isoSelected);
-}
-
-function propagateNameColorAndUpdate(
-  id,
-  newName,
-  newColor,
-  newDone,
-  newValue,
-  newDate
-) {
-  const newKey = newName.trim().toLowerCase();
-  nameColorMap.set(newKey, newColor);
-
-  for (const [dateKey, arr] of eventsByDate.entries()) {
-    for (let i = 0; i < arr.length; i++) {
-      const ev = arr[i];
-      const evKey = ev.name.trim().toLowerCase();
-      if (ev.id === id) {
-        ev.name = newName;
-        ev.color = newColor;
-        ev.done = newDone;
-        ev.value = newValue;
-        ev.event_date = newDate;
-
-        if (dateKey !== newDate) {
-          arr.splice(i, 1);
-          if (arr.length === 0) eventsByDate.delete(dateKey);
-          if (!eventsByDate.has(newDate)) eventsByDate.set(newDate, []);
-          eventsByDate.get(newDate).push(ev);
-        }
-      } else if (evKey === newKey) {
-        ev.color = newColor;
-      }
-    }
-  }
-}
-
-// ======================
-// EVENT FORM HANDLING
-// ======================
-
-eventForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!selectedDate) return;
-
-  const isoDate = toISODate(selectedDate);
-  const name = eventNameInput.value.trim();
-  const value = parseFloat(eventValueInput.value);
-  const color = eventColorInput.value;
-  const done = eventDoneInput.checked;
-  const id = eventIdInput.value || null;
-
-  if (!name || isNaN(value)) return;
-
-  const evData = {
-    id,
-    event_date: isoDate,
+  const payload = {
+    event_date: selectedDate,
     name,
     value,
     color,
-    done,
   };
 
-  await saveEvent(evData);
-  closeModal();
-});
+  if (!editingEventId) {
+    // insert new
+    const { data, error } = await supabase
+      .from('events')
+      .insert(payload)
+      .select('*');
 
-deleteEventBtn.addEventListener("click", async () => {
-  const id = eventIdInput.value;
-  if (!id) return;
+    if (error) {
+      eventFormMessage.textContent = `Error adding event: ${error.message}`;
+      return;
+    }
 
-  const yes = confirm("Delete this event?");
-  if (!yes) return;
+    // sync color for this name across events: update existing rows with same name (case-insensitive)
+    const normName = normalizeName(name);
+    await supabase
+      .from('events')
+      .update({ color })
+      .ilike('name', normName);
 
-  await deleteEventById(id);
-  closeModal();
-});
+    // reload all
+    await loadAllEvents();
+    renderCalendar();
+    updateSelectedDateUI();
+    resetEventForm();
+  } else {
+    // update existing
+    const { error } = await supabase
+      .from('events')
+      .update(payload)
+      .eq('id', editingEventId);
 
-function clearEventForm() {
-  eventIdInput.value = "";
-  eventNameInput.value = "";
-  eventValueInput.value = "";
-  eventColorInput.value = "#00b894";
-  eventDoneInput.checked = false;
+    if (error) {
+      eventFormMessage.textContent = `Error updating event: ${error.message}`;
+      return;
+    }
+
+    // sync color across same-name events
+    const normName = normalizeName(name);
+    await supabase
+      .from('events')
+      .update({ color })
+      .ilike('name', normName);
+
+    await loadAllEvents();
+    renderCalendar();
+    updateSelectedDateUI();
+    resetEventForm();
+  }
 }
 
-// Fill the form for editing a specific event
-function fillFormForEvent(ev) {
-  selectedDate = new Date(ev.event_date);
-  eventIdInput.value = ev.id;
-  eventNameInput.value = ev.name;
-  eventValueInput.value = ev.value;
-  eventColorInput.value = ev.color || "#00b894";
-  eventDoneInput.checked = !!ev.done;
-
-  updateEventFormDate();
-  selectDate(selectedDate);
+function resetEventForm() {
+  editingEventId = null;
+  eventFormTitle.textContent = 'Add event';
+  eventNameInput.value = '';
+  eventValueInput.value = '';
+  eventColorInput.value = '#4caf50';
+  cancelEditBtn.classList.add('hidden');
+  eventFormMessage.textContent = '';
 }
 
-// ======================
-// DAY EVENTS LIST
-// ======================
+// Delete event
+async function deleteEvent(eventId) {
+  if (!confirm('Delete this event?')) return;
+  await supabase.from('events').delete().eq('id', eventId);
+  await loadAllEvents();
+  renderCalendar();
+  updateSelectedDateUI();
+}
 
-function renderDayEvents(iso) {
-  const events = eventsByDate.get(iso) || [];
-  dayEventsList.innerHTML = "";
+// Toggle done/paid status
+async function toggleDone(eventObj) {
+  const { id, done } = eventObj;
+  const { error } = await supabase
+    .from('events')
+    .update({ done: !done })
+    .eq('id', id);
 
-  if (events.length === 0) {
-    const empty = document.createElement("div");
-    empty.textContent = "No events for this day.";
-    empty.style.fontSize = "0.85rem";
-    empty.style.color = "#7c8a96";
+  if (error) {
+    console.error('Error toggling done status', error);
+    return;
+  }
+
+  await loadAllEvents();
+  renderCalendar();
+  updateSelectedDateUI();
+}
+
+// Set editing state from an event
+function startEditingEvent(eventObj) {
+  editingEventId = eventObj.id;
+  eventFormTitle.textContent = 'Edit event';
+  eventNameInput.value = eventObj.name;
+  eventValueInput.value = eventObj.value;
+  eventColorInput.value = eventObj.color;
+  cancelEditBtn.classList.remove('hidden');
+  eventFormMessage.textContent = '';
+}
+
+// =======================
+// Calendar rendering
+// =======================
+
+function renderCalendar() {
+  calendarDaysContainer.innerHTML = '';
+
+  const firstDay = new Date(currentYear, currentMonth, 1);
+  const lastDay = new Date(currentYear, currentMonth + 1, 0);
+  const monthName = firstDay.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+
+  monthLabel.textContent = monthName;
+
+  dailyLimitLabel.textContent = formatCurrency(DAILY_LIMIT);
+
+  // Days of previous blanks
+  const leadingBlanks = firstDay.getDay();
+
+  for (let i = 0; i < leadingBlanks; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'day-cell empty';
+    calendarDaysContainer.appendChild(blank);
+  }
+
+  const totalDays = lastDay.getDate();
+
+  // Build events by date
+  const eventsByDate = {};
+  allEvents.forEach(ev => {
+    const key = ev.event_date;
+    if (!eventsByDate[key]) {
+      eventsByDate[key] = [];
+    }
+    eventsByDate[key].push(ev);
+  });
+
+  for (let day = 1; day <= totalDays; day++) {
+    const dateObj = new Date(currentYear, currentMonth, day);
+    const dateKey = formatDateKey(dateObj);
+    const dayEvents = eventsByDate[dateKey] || [];
+    const dayCell = document.createElement('div');
+    dayCell.className = 'day-cell';
+    dayCell.dataset.date = dateKey;
+
+    const header = document.createElement('div');
+    header.className = 'day-cell-header';
+
+    const num = document.createElement('div');
+    num.className = 'day-number';
+    num.textContent = day;
+
+    const totalDiv = document.createElement('div');
+    totalDiv.className = 'day-total';
+
+    const totalValue = dayEvents.reduce((sum, e) => sum + Number(e.value || 0), 0);
+    totalDiv.textContent = totalValue > 0 ? formatCurrency(totalValue) : '';
+
+    if (totalValue > DAILY_LIMIT) {
+      dayCell.classList.add('over-limit');
+    }
+
+    header.appendChild(num);
+    header.appendChild(totalDiv);
+    dayCell.appendChild(header);
+
+    const pillContainer = document.createElement('div');
+    pillContainer.className = 'day-pills';
+
+    // group color by normalized name to ensure consistent color
+    const colorByName = {};
+    dayEvents.forEach(ev => {
+      const key = normalizeName(ev.name);
+      if (!colorByName[key]) {
+        colorByName[key] = ev.color || '#4caf50';
+      }
+    });
+
+    dayEvents.forEach(ev => {
+      const pill = document.createElement('div');
+      pill.className = 'pill';
+      const colorKey = normalizeName(ev.name);
+      const pillColor = colorByName[colorKey] || ev.color || '#4caf50';
+      pill.style.backgroundColor = pillColor;
+      pill.textContent = ev.name;
+
+      if (ev.done) {
+        pill.classList.add('done');
+      }
+
+      pillContainer.appendChild(pill);
+    });
+
+    dayCell.appendChild(pillContainer);
+
+    if (selectedDate === dateKey) {
+      dayCell.classList.add('selected');
+    }
+
+    dayCell.addEventListener('click', () => {
+      selectedDate = dateKey;
+      updateSelectedDateUI();
+      renderCalendar(); // rerender to highlight selected cell
+    });
+
+    calendarDaysContainer.appendChild(dayCell);
+  }
+
+  // disable prev/next if out of range
+  prevMonthBtn.disabled = !monthInRange(
+    currentYear,
+    currentMonth - 1
+  );
+  nextMonthBtn.disabled = !monthInRange(
+    currentYear,
+    currentMonth + 1
+  );
+}
+
+function updateSelectedDateUI() {
+  if (!selectedDate) {
+    selectedDateLabel.textContent = 'Select a date';
+    totalAmountLabel.textContent = '0.00';
+    usedAmountLabel.textContent = '0.00';
+    remainingAmountLabel.textContent = '0.00';
+    dayEventsList.innerHTML = '';
+    return;
+  }
+
+  const dateObj = parseDateKey(selectedDate);
+  const label = dateObj.toLocaleDateString(undefined, {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  selectedDateLabel.textContent = label;
+
+  // Filter events for selected date
+  const events = allEvents.filter(ev => ev.event_date === selectedDate);
+
+  // Stats
+  const total = events.reduce((sum, e) => sum + Number(e.value || 0), 0);
+  const used = total; // you could define done vs not-done differently, but spec says show total/used/remaining
+  const remaining = DAILY_LIMIT - used;
+
+  totalAmountLabel.textContent = formatCurrency(total);
+  usedAmountLabel.textContent = formatCurrency(used);
+  remainingAmountLabel.textContent = formatCurrency(remaining);
+
+  renderDaySummary(events);
+}
+
+function renderDaySummary(events) {
+  dayEventsList.innerHTML = '';
+
+  if (!events || events.length === 0) {
+    const empty = document.createElement('li');
+    empty.textContent = 'No events for this day.';
+    empty.style.color = '#6f7b87';
+    empty.style.fontSize = '0.8rem';
     dayEventsList.appendChild(empty);
     return;
   }
 
-  for (const ev of events) {
-    const row = document.createElement("div");
-    row.classList.add("day-event-item");
+  events.forEach(ev => {
+    const li = document.createElement('li');
+    li.className = 'day-event-item';
+    if (ev.done) {
+      li.classList.add('done');
+    }
 
-    const left = document.createElement("div");
-    left.classList.add("day-event-left");
+    // main clickable area for edit
+    const mainDiv = document.createElement('div');
+    mainDiv.className = 'day-event-main';
 
-    const colorDot = document.createElement("div");
-    colorDot.classList.add("day-event-color");
-    colorDot.style.backgroundColor = ev.color;
+    const colorDot = document.createElement('div');
+    colorDot.style.width = '10px';
+    colorDot.style.height = '10px';
+    colorDot.style.borderRadius = '50%';
+    colorDot.style.backgroundColor = ev.color || '#4caf50';
+    colorDot.style.border = '1px solid rgba(0,0,0,0.4)';
 
-    const nameSpan = document.createElement("span");
-    nameSpan.classList.add("day-event-name");
-    if (ev.done) nameSpan.classList.add("done");
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'day-event-name';
     nameSpan.textContent = ev.name;
 
-    left.appendChild(colorDot);
-    left.appendChild(nameSpan);
+    const valSpan = document.createElement('span');
+    valSpan.className = 'day-event-value';
+    valSpan.textContent = formatCurrency(ev.value);
 
-    const right = document.createElement("div");
-    right.classList.add("day-event-meta");
-    right.textContent = `${Number(ev.value).toLocaleString()} ${
-      ev.done ? "(done)" : ""
-    }`;
+    mainDiv.appendChild(colorDot);
+    mainDiv.appendChild(nameSpan);
+    mainDiv.appendChild(valSpan);
 
-    row.appendChild(left);
-    row.appendChild(right);
+    mainDiv.addEventListener('click', () => startEditingEvent(ev));
 
-    row.addEventListener("click", async (e) => {
-      e.stopPropagation(); // prevent calendar cell click
-      selectDate(new Date(ev.event_date));
-      if (e.metaKey || e.ctrlKey) {
-        const yes = confirm("Delete this event?");
-        if (yes) {
-          await deleteEventById(ev.id);
-        }
-      } else {
-        fillFormForEvent(ev);
-        openModal(true);
-      }
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'day-event-actions';
+
+    const doneBtn = document.createElement('button');
+    doneBtn.type = 'button';
+    doneBtn.className = 'toggle-done-btn';
+    doneBtn.textContent = ev.done ? 'Undo' : 'Done';
+    doneBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDone(ev);
     });
 
-    dayEventsList.appendChild(row);
-  }
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'delete-btn';
+    delBtn.textContent = 'Del';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteEvent(ev.id);
+    });
+
+    actionsDiv.appendChild(doneBtn);
+    actionsDiv.appendChild(delBtn);
+
+    li.appendChild(mainDiv);
+    li.appendChild(actionsDiv);
+
+    dayEventsList.appendChild(li);
+  });
 }
 
-// ======================
-// STARTUP
-// ======================
+// =======================
+// Month navigation
+// =======================
 
-checkAuthOnLoad();
+function goToPrevMonth() {
+  const newMonth = currentMonth - 1;
+  const newYear = newMonth < 0 ? currentYear - 1 : currentYear;
+  const adjustedMonth = (newMonth + 12) % 12;
+
+  if (!monthInRange(newYear, adjustedMonth)) return;
+
+  currentYear = newYear;
+  currentMonth = adjustedMonth;
+  renderCalendar();
+  updateSelectedDateUI();
+}
+
+function goToNextMonth() {
+  const newMonth = currentMonth + 1;
+  const newYear = newMonth > 11 ? currentYear + 1 : currentYear;
+  const adjustedMonth = newMonth % 12;
+
+  if (!monthInRange(newYear, adjustedMonth)) return;
+
+  currentYear = newYear;
+  currentMonth = adjustedMonth;
+  renderCalendar();
+  updateSelectedDateUI();
+}
+
+// =======================
+// Event listeners
+// =======================
+
+loginBtn.addEventListener('click', handleLogin);
+signupBtn.addEventListener('click', handleSignup);
+logoutBtn.addEventListener('click', handleLogout);
+
+saveEventBtn.addEventListener('click', saveEvent);
+cancelEditBtn.addEventListener('click', resetEventForm);
+
+prevMonthBtn.addEventListener('click', goToPrevMonth);
+nextMonthBtn.addEventListener('click', goToNextMonth);
+
+// Auth state listener
+supabase.auth.onAuthStateChange((_event, _session) => {
+  refreshSessionUI();
+});
+
+// Initial load
+document.addEventListener('DOMContentLoaded', () => {
+  dailyLimitLabel.textContent = formatCurrency(DAILY_LIMIT);
+  refreshSessionUI();
+});
