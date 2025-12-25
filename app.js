@@ -54,11 +54,19 @@ const nextMonthBtn = document.getElementById("next-month-btn");
 const calendarDays = document.getElementById("calendar-days");
 
 const logoutBtn = document.getElementById("logout-btn");
+const addEventBtn = document.getElementById("add-event-btn");
 
 const summaryDate = document.getElementById("summary-date");
 const summaryLimit = document.getElementById("summary-limit");
 const summaryUsed = document.getElementById("summary-used");
 const summaryRemaining = document.getElementById("summary-remaining");
+
+const dayEventsList = document.getElementById("day-events-list");
+
+// Modal elements
+const eventModal = document.getElementById("event-modal");
+const modalClose = document.getElementById("modal-close");
+const modalTitle = document.getElementById("modal-title");
 
 const eventForm = document.getElementById("event-form");
 const eventDateDisplay = document.getElementById("event-date-display");
@@ -67,9 +75,7 @@ const eventValueInput = document.getElementById("event-value");
 const eventColorInput = document.getElementById("event-color");
 const eventDoneInput = document.getElementById("event-done");
 const eventIdInput = document.getElementById("event-id");
-const resetFormBtn = document.getElementById("reset-form-btn");
-
-const dayEventsList = document.getElementById("day-events-list");
+const deleteEventBtn = document.getElementById("delete-event-btn");
 
 // ======================
 // UTILITIES
@@ -94,12 +100,13 @@ function withinRange(year, month) {
   const start = new Date(START_YEAR, START_MONTH, 1);
   const end = new Date(END_YEAR, END_MONTH + 1, 0); // inclusive
   const cur = new Date(year, month, 1);
-  return cur >= new Date(start.getFullYear(), start.getMonth(), 1) &&
-    cur <= new Date(end.getFullYear(), end.getMonth(), 1);
+  return (
+    cur >= new Date(start.getFullYear(), start.getMonth(), 1) &&
+    cur <= new Date(end.getFullYear(), end.getMonth(), 1)
+  );
 }
 
 function clampMonthYear(year, month) {
-  // Ensure the (year, month) is within [START, END]
   const startIndex = START_YEAR * 12 + START_MONTH;
   const endIndex = END_YEAR * 12 + END_MONTH;
   let idx = year * 12 + month;
@@ -107,6 +114,29 @@ function clampMonthYear(year, month) {
   if (idx > endIndex) idx = endIndex;
   return [Math.floor(idx / 12), idx % 12];
 }
+
+// ======================
+// MODAL
+// ======================
+
+function openModal(isEdit = false) {
+  modalTitle.textContent = isEdit ? "Edit Event" : "Add Event";
+  deleteEventBtn.classList.toggle("hidden", !isEdit);
+  eventModal.classList.remove("hidden");
+}
+
+function closeModal() {
+  eventModal.classList.add("hidden");
+  clearEventForm();
+}
+
+modalClose.addEventListener("click", closeModal);
+
+eventModal.addEventListener("click", (e) => {
+  if (e.target === eventModal) {
+    closeModal();
+  }
+});
 
 // ======================
 // AUTH HANDLERS
@@ -154,7 +184,7 @@ authForm.addEventListener("submit", async (e) => {
     showCalendar();
   } finally {
     loginBtn.disabled = false;
-    signupBtn.disabled = true;
+    signupBtn.disabled = false;
   }
 });
 
@@ -171,7 +201,7 @@ signupBtn.addEventListener("click", async () => {
   try {
     loginBtn.disabled = true;
     signupBtn.disabled = true;
-    const { data, error } = await supabaseClient.auth.signUp({
+    const { error } = await supabaseClient.auth.signUp({
       email,
       password,
     });
@@ -179,7 +209,8 @@ signupBtn.addEventListener("click", async () => {
       authMessage.textContent = error.message;
       return;
     }
-    authMessage.textContent = "Sign up successful. Check your email (if confirmation required), then log in.";
+    authMessage.textContent =
+      "Sign up successful. Check your email (if confirmation required), then log in.";
   } finally {
     loginBtn.disabled = false;
     signupBtn.disabled = false;
@@ -194,16 +225,21 @@ logoutBtn.addEventListener("click", async () => {
   showAuth();
 });
 
+// "Add Event" button near summary
+addEventBtn.addEventListener("click", () => {
+  clearEventForm();
+  updateEventFormDate();
+  openModal(false);
+});
+
 // ======================
 // CALENDAR RENDERING
 // ======================
 
 async function initCalendar() {
-  // Clamp selected date into allowed range
   [currentYear, currentMonth] = clampMonthYear(currentYear, currentMonth);
   selectedDate = new Date(currentYear, currentMonth, 1);
 
-  // Load events from Supabase
   await loadAllEvents();
 
   renderCalendar();
@@ -222,7 +258,6 @@ function renderCalendar() {
   const startWeekday = firstDayOfMonth.getDay();
   const daysInMonth = lastDayOfMonth.getDate();
 
-  // Determine starting date for the grid
   let gridStartDate = new Date(currentYear, currentMonth, 1 - startWeekday);
 
   for (let i = 0; i < 42; i++) {
@@ -235,12 +270,10 @@ function renderCalendar() {
     const dayDiv = document.createElement("div");
     dayDiv.classList.add("calendar-day");
 
-    // Mark outside month
     if (dayDate.getMonth() !== currentMonth) {
       dayDiv.classList.add("outside-month");
     }
 
-    // Mark outside allowed range
     if (!withinRange(dayDate.getFullYear(), dayDate.getMonth())) {
       dayDiv.classList.add("outside-range");
     }
@@ -259,15 +292,25 @@ function renderCalendar() {
       if (ev.done) pill.classList.add("done");
       pill.style.backgroundColor = ev.color;
       pill.innerHTML = `<span class="event-pill-check">${ev.done ? "✔" : "•"}</span><span>${ev.name}</span>`;
+
+      // Click on event pill: edit that event in modal
+      pill.addEventListener("click", (e) => {
+        e.stopPropagation(); // prevent day cell click
+        fillFormForEvent(ev);
+        openModal(true);
+      });
+
       dayDiv.appendChild(pill);
     }
 
-    // Click handler
     dayDiv.addEventListener("click", () => {
-      selectDate(new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()));
+      selectDate(
+        new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate())
+      );
+      clearEventForm();
+      openModal(false);
     });
 
-    // Mark selected
     if (toISODate(dayDate) === toISODate(selectedDate)) {
       dayDiv.classList.add("selected");
     }
@@ -299,6 +342,7 @@ prevMonthBtn.addEventListener("click", () => {
   }
   [currentYear, currentMonth] = clampMonthYear(year, month);
   renderCalendar();
+  selectDate(new Date(currentYear, currentMonth, 1));
 });
 
 nextMonthBtn.addEventListener("click", () => {
@@ -310,6 +354,7 @@ nextMonthBtn.addEventListener("click", () => {
   }
   [currentYear, currentMonth] = clampMonthYear(year, month);
   renderCalendar();
+  selectDate(new Date(currentYear, currentMonth, 1));
 });
 
 // ======================
@@ -318,35 +363,28 @@ nextMonthBtn.addEventListener("click", () => {
 
 function selectDate(dateObj) {
   const iso = toISODate(dateObj);
-  const oldISO = toISODate(selectedDate);
   selectedDate = dateObj;
 
-  // Update selected class on calendar cells
   const dayNodes = Array.from(calendarDays.children);
-  dayNodes.forEach((node) => {
-    node.classList.remove("selected");
-  });
+  dayNodes.forEach((node) => node.classList.remove("selected"));
 
   dayNodes.forEach((node) => {
     const numNode = node.querySelector(".day-number");
     if (!numNode) return;
     const day = parseInt(numNode.textContent, 10);
-    // try to reconstruct date from cell (approx.)
     const isOutsideMonth = node.classList.contains("outside-month");
+
     let cellMonth = currentMonth;
     let cellYear = currentYear;
 
     if (isOutsideMonth) {
-      // Determine if cell belongs to previous or next month
       if (day > 15) {
-        // likely previous month
         cellMonth = currentMonth - 1;
         if (cellMonth < 0) {
           cellMonth = 11;
           cellYear--;
         }
       } else {
-        // likely next month
         cellMonth = currentMonth + 1;
         if (cellMonth > 11) {
           cellMonth = 0;
@@ -367,12 +405,8 @@ function selectDate(dateObj) {
 }
 
 function updateSummaryForDate(iso) {
-  const dateParts = iso.split("-");
-  const dateObj = new Date(
-    Number(dateParts[0]),
-    Number(dateParts[1]) - 1,
-    Number(dateParts[2])
-  );
+  const [y, m, d] = iso.split("-").map(Number);
+  const dateObj = new Date(y, m - 1, d);
 
   const events = eventsByDate.get(iso) || [];
   const used = events.reduce((sum, ev) => sum + Number(ev.value || 0), 0);
@@ -431,20 +465,17 @@ async function loadAllEvents() {
 async function saveEvent(evData) {
   const isEdit = !!evData.id;
 
-  // Normalize name and color
   const normalizedName = evData.name.trim();
   const nameKey = normalizedName.toLowerCase();
 
-  // If there is a known color for this name, override input color with it
   if (nameColorMap.has(nameKey)) {
     evData.color = nameColorMap.get(nameKey);
   } else {
-    // If new name, store chosen color in map
     nameColorMap.set(nameKey, evData.color);
   }
 
   if (isEdit) {
-    const { data, error } = await supabaseClient
+    const { error } = await supabaseClient
       .from("events")
       .update({
         event_date: evData.event_date,
@@ -453,26 +484,33 @@ async function saveEvent(evData) {
         color: evData.color,
         done: evData.done,
       })
-      .eq("id", evData.id)
-      .select();
+      .eq("id", evData.id);
 
     if (error) {
       console.error("Update error:", error);
       return;
     }
 
-    // Update local cache including name/color propagation
-    propagateNameColorAndUpdate(evData.id, normalizedName, evData.color, evData.done, evData.value, evData.event_date);
+    propagateNameColorAndUpdate(
+      evData.id,
+      normalizedName,
+      evData.color,
+      evData.done,
+      evData.value,
+      evData.event_date
+    );
   } else {
     const { data, error } = await supabaseClient
       .from("events")
-      .insert([{
-        event_date: evData.event_date,
-        name: normalizedName,
-        value: evData.value,
-        color: evData.color,
-        done: evData.done,
-      }])
+      .insert([
+        {
+          event_date: evData.event_date,
+          name: normalizedName,
+          value: evData.value,
+          color: evData.color,
+          done: evData.done,
+        },
+      ])
       .select();
 
     if (error) {
@@ -488,9 +526,8 @@ async function saveEvent(evData) {
     eventsByDate.get(dateKey).push(inserted);
   }
 
-  // Reload current month visuals
-  renderCalendar();
   const isoSelected = toISODate(selectedDate);
+  renderCalendar();
   renderDayEvents(isoSelected);
   updateSummaryForDate(isoSelected);
 }
@@ -506,7 +543,6 @@ async function deleteEventById(eventId) {
     return;
   }
 
-  // Remove from cache
   for (const [dateKey, arr] of eventsByDate.entries()) {
     const idx = arr.findIndex((ev) => ev.id === eventId);
     if (idx !== -1) {
@@ -524,27 +560,28 @@ async function deleteEventById(eventId) {
   updateSummaryForDate(isoSelected);
 }
 
-// Propagate name + color changes to all events with the same name (case-insensitive)
-function propagateNameColorAndUpdate(id, newName, newColor, newDone, newValue, newDate) {
+function propagateNameColorAndUpdate(
+  id,
+  newName,
+  newColor,
+  newDone,
+  newValue,
+  newDate
+) {
   const newKey = newName.trim().toLowerCase();
-
-  // Update color map
   nameColorMap.set(newKey, newColor);
 
-  // Update all events
   for (const [dateKey, arr] of eventsByDate.entries()) {
     for (let i = 0; i < arr.length; i++) {
       const ev = arr[i];
       const evKey = ev.name.trim().toLowerCase();
       if (ev.id === id) {
-        // Update full record including date
         ev.name = newName;
         ev.color = newColor;
         ev.done = newDone;
         ev.value = newValue;
         ev.event_date = newDate;
 
-        // If date changed, move event between date buckets
         if (dateKey !== newDate) {
           arr.splice(i, 1);
           if (arr.length === 0) eventsByDate.delete(dateKey);
@@ -552,7 +589,6 @@ function propagateNameColorAndUpdate(id, newName, newColor, newDone, newValue, n
           eventsByDate.get(newDate).push(ev);
         }
       } else if (evKey === newKey) {
-        // Same name (case-insensitive) → color sync
         ev.color = newColor;
       }
     }
@@ -574,9 +610,7 @@ eventForm.addEventListener("submit", async (e) => {
   const done = eventDoneInput.checked;
   const id = eventIdInput.value || null;
 
-  if (!name || isNaN(value)) {
-    return;
-  }
+  if (!name || isNaN(value)) return;
 
   const evData = {
     id,
@@ -588,11 +622,18 @@ eventForm.addEventListener("submit", async (e) => {
   };
 
   await saveEvent(evData);
-  clearEventForm();
+  closeModal();
 });
 
-resetFormBtn.addEventListener("click", () => {
-  clearEventForm();
+deleteEventBtn.addEventListener("click", async () => {
+  const id = eventIdInput.value;
+  if (!id) return;
+
+  const yes = confirm("Delete this event?");
+  if (!yes) return;
+
+  await deleteEventById(id);
+  closeModal();
 });
 
 function clearEventForm() {
@@ -611,6 +652,8 @@ function fillFormForEvent(ev) {
   eventValueInput.value = ev.value;
   eventColorInput.value = ev.color || "#00b894";
   eventDoneInput.checked = !!ev.done;
+
+  updateEventFormDate();
   selectDate(selectedDate);
 }
 
@@ -644,9 +687,7 @@ function renderDayEvents(iso) {
 
     const nameSpan = document.createElement("span");
     nameSpan.classList.add("day-event-name");
-    if (ev.done) {
-      nameSpan.classList.add("done");
-    }
+    if (ev.done) nameSpan.classList.add("done");
     nameSpan.textContent = ev.name;
 
     left.appendChild(colorDot);
@@ -654,13 +695,15 @@ function renderDayEvents(iso) {
 
     const right = document.createElement("div");
     right.classList.add("day-event-meta");
-    right.textContent = `${Number(ev.value).toLocaleString()} ${ev.done ? "(done)" : ""}`;
+    right.textContent = `${Number(ev.value).toLocaleString()} ${
+      ev.done ? "(done)" : ""
+    }`;
 
     row.appendChild(left);
     row.appendChild(right);
 
     row.addEventListener("click", async (e) => {
-      // Check for ctrl/cmd + click as quick delete, otherwise edit
+      e.stopPropagation(); // prevent calendar cell click
       if (e.metaKey || e.ctrlKey) {
         const yes = confirm("Delete this event?");
         if (yes) {
@@ -668,6 +711,7 @@ function renderDayEvents(iso) {
         }
       } else {
         fillFormForEvent(ev);
+        openModal(true);
       }
     });
 
