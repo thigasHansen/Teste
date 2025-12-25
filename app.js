@@ -2,8 +2,8 @@
 // CONFIG: EDIT THIS PART
 // ======================
 
-const SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR_PUBLIC_ANON_KEY";
+const SUPABASE_URL = "https://tecbuwpdhhlbzgjadego.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_DDNV8FDFpgYoEelsTk0zbQ_AL7oePju";
 
 // Daily limit (same for all days)
 const DAILY_LIMIT = 6000000;
