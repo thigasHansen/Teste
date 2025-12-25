@@ -2,36 +2,56 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Budget Calendar</title>
+  <title>Calendário Dinastia</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="style.css" />
+  <!-- Supabase JS client (CDN) -->
   <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
   <div id="app">
+    <!-- Top bar -->
     <header class="top-bar">
       <div class="logo-container">
         <img src="logo.png" alt="Logo" class="logo" />
-        <span class="app-title">Budget Calendar</span>
+        <span class="app-title">Calendário Dinastia</span>
       </div>
       <div class="right-top">
         <div id="day-summary">
-          <div class="summary-row"><span class="summary-label">Date:</span><span id="summary-date" class="summary-value">-</span></div>
-          <div class="summary-row"><span class="summary-label">Daily limit:</span><span id="summary-limit" class="summary-value">-</span></div>
-          <div class="summary-row"><span class="summary-label">Used:</span><span id="summary-used" class="summary-value">-</span></div>
-          <div class="summary-row"><span class="summary-label">Remaining:</span><span id="summary-remaining" class="summary-value">-</span></div>
+          <div class="summary-row">
+            <span class="summary-label">Date:</span>
+            <span id="summary-date" class="summary-value">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Limite diário:</span>
+            <span id="summary-limit" class="summary-value">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Utilizado:</span>
+            <span id="summary-used" class="summary-value">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Restante:</span>
+            <span id="summary-remaining" class="summary-value">-</span>
+          </div>
         </div>
-        <button id="add-event-btn" class="btn btn-primary">Add Event</button>
+        <button id="add-event-btn" class="btn btn-primary">Adicionar</button>
         <button id="logout-btn" class="btn btn-secondary">Logout</button>
       </div>
     </header>
 
-    <!-- AUTH -->
+    <!-- Auth container -->
     <main id="auth-container" class="auth-container">
       <form id="auth-form" class="auth-form">
-        <h2>Sign in</h2>
-        <label><span>Email</span><input type="email" id="auth-email" required /></label>
-        <label><span>Password</span><input type="password" id="auth-password" required /></label>
+        <h2>Entrar</h2>
+        <label>
+          <span>Email</span>
+          <input type="email" id="auth-email" required />
+        </label>
+        <label>
+          <span>Senha</span>
+          <input type="password" id="auth-password" required />
+        </label>
         <div class="auth-actions">
           <button type="submit" id="login-btn" class="btn btn-primary">Login</button>
           <button type="button" id="signup-btn" class="btn btn-secondary">Sign up</button>
@@ -40,24 +60,31 @@
       </form>
     </main>
 
-    <!-- CALENDAR -->
-    <main id="calendar-container" class="calendar-container hidden">
-      <div class="calendar-header">
-        <button id="prev-month-btn" class="btn btn-icon">&lt;</button>
-        <h2 id="month-label"></h2>
-        <button id="next-month-btn" class="btn btn-icon">&gt;</button>
-      </div>
-
-      <div class="calendar-grid">
-        <div class="calendar-weekdays">
-          <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+    <!-- Calendar + day events -->
+    <main id="calendar-container" class="calendar-container hidden two-column">
+      <section class="calendar-column">
+        <div class="calendar-header">
+          <button id="prev-month-btn" class="btn btn-icon">&lt;</button>
+          <h2 id="month-label"></h2>
+          <button id="next-month-btn" class="btn btn-icon">&gt;</button>
         </div>
-        <div id="calendar-days" class="calendar-days"></div>
-      </div>
+        <div class="calendar-grid">
+          <div class="calendar-weekdays">
+            <div>Dom</div>
+            <div>Seg</div>
+            <div>Ter</div>
+            <div>Qua</div>
+            <div>Qui</div>
+            <div>Sex</div>
+            <div>Sab</div>
+          </div>
+          <div id="calendar-days" class="calendar-days"></div>
+        </div>
+      </section>
 
-      <!-- EVENTS FOR SELECTED DAY -->
+      <!-- Events list for selected day on the right -->
       <section class="day-events-section">
-        <h3>Events for selected day</h3>
+        <h3>Agendamentos do dia selecionado</h3>
         <div id="day-events-list" class="day-events-list"></div>
       </section>
     </main>
@@ -67,26 +94,41 @@
   <div id="event-modal" class="modal hidden">
     <div class="modal-content">
       <span id="modal-close" class="modal-close">&times;</span>
-      <h3 id="modal-title">Add / Edit Event</h3>
+      <h3 id="modal-title">Adicionar / Editar agendamento</h3>
 
       <form id="event-form" class="event-form">
         <div class="form-row">
-          <label><span>Date</span><input type="text" id="event-date-display" disabled /></label>
+          <label>
+            <span>Data</span>
+            <input type="text" id="event-date-display" disabled />
+          </label>
         </div>
 
         <div class="form-row">
-          <label><span>Name</span><input type="text" id="event-name" required /></label>
-          <label><span>Value</span><input type="number" step="0.01" id="event-value" required /></label>
+          <label>
+            <span>Nome</span>
+            <input type="text" id="event-name" required />
+          </label>
+          <label>
+            <span>Valor</span>
+            <input type="number" step="0.01" id="event-value" required />
+          </label>
         </div>
 
         <div class="form-row">
-          <label><span>Color</span><input type="color" id="event-color" value="#00b894" /></label>
-          <label class="checkbox-label"><input type="checkbox" id="event-done" /><span>Done / Paid</span></label>
+          <label>
+            <span>Cor</span>
+            <input type="color" id="event-color" value="#00b894" />
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="event-done" />
+            <span>Lavado</span>
+          </label>
         </div>
 
         <div class="form-actions">
-          <button type="submit" id="save-event-btn" class="btn btn-primary">Save</button>
-          <button type="button" id="delete-event-btn" class="btn btn-secondary hidden">Delete</button>
+          <button type="submit" id="save-event-btn" class="btn btn-primary">Salvar</button>
+          <button type="button" id="delete-event-btn" class="btn btn-secondary hidden">Deletar</button>
         </div>
 
         <input type="hidden" id="event-id" />
